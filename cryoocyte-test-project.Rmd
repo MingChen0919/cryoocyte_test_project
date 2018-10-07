@@ -1,0 +1,175 @@
+---
+title: "Cryoocyte Test Project"
+author: "Ming Chen"
+date: "10/5/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+## Import Libraries
+
+```{r}
+library(ggplot2)   # data visualization
+library(tidyverse) # a set of module for data manipulation
+library(leaps)
+library(caret)
+library(gridExtra)
+```
+
+## Import Data
+
+```{r}
+my_data = read_csv('data/train.csv')
+my_test_data = read_csv('data/test.csv')
+```
+
+
+# Linear Model selection
+
+## Forward selection
+
+```{r}
+n = 20 # 20x cross valiation: train/test = 70/30
+
+#-------first run-------
+index = sample(1:nrow(my_data), size = round(0.7*nrow(my_data)))
+train = my_data[index, ]
+test = my_data[-index, ]
+regfit.fwd = regsubsets(y~., data = train, nvmax = 1000, method = "forward")
+regfit.fwd.summary = summary(regfit.fwd)
+
+best_num_of_variables = head(which(regfit.fwd.summary$adjr2 > 0.995), 1)
+best_variables = paste0(names(coef(regfit.fwd, best_num_of_variables))[-1], collapse=',')
+best_models = data.frame(best_num_of_variables, best_variables, stringsAsFactors = FALSE)
+selected_columns = c(names(coef(regfit.fwd, best_num_of_variables)[-1]), 'y')
+lm.fit = lm(y~., data = train[selected_columns])
+train_pred = predict(lm.fit, newdata = train[selected_columns])
+test_pred = predict(lm.fit, newdata = test[selected_columns])
+train_error = (train$y - train_pred)^2
+test_error = (test$y - test_pred)^2
+errors_df = data.frame(run_01=c(train_error, test_error))
+
+
+RSS_df = data.frame(run_01 = regfit.fwd.summary$rss)
+RSq_df = data.frame(run_01 = regfit.fwd.summary$adjr2)
+Cp_df = data.frame(run_01 = regfit.fwd.summary$cp)
+BIC_df = data.frame(run_01 = regfit.fwd.summary$bic)
+
+#-------second to n runs------
+for (i in 2:n) {
+  index = sample(1:nrow(my_data), size = round(0.7*nrow(my_data)))
+  train = my_data[index, ]
+  test = my_data[-index, ]
+  regfit.fwd = regsubsets(y~., data = train, nvmax = 1000, method = "forward")
+  regfit.fwd.summary = summary(regfit.fwd)
+  if (i < 10) {
+    col_name = paste0('run_0', i)
+  } else {
+    col_name = paste0('run_', i)
+  }
+  
+  best_num_of_variables = head(which(regfit.fwd.summary$adjr2 > 0.995), 1)
+  best_variables = paste0(names(coef(regfit.fwd, best_num_of_variables))[-1], collapse=',')
+  best_models[i, ] = c(best_num_of_variables, best_variables)
+  selected_columns = c(names(coef(regfit.fwd, best_num_of_variables)[-1]), 'y')
+  lm.fit = lm(y~., data = train[selected_columns])
+  train_pred = predict(lm.fit, newdata = train[selected_columns])
+  test_pred = predict(lm.fit, newdata = test[selected_columns])
+  train_error = (train$y - train_pred)^2
+  test_error = (test$y - test_pred)^2
+  errors_df[col_name] = data.frame(run_1=c(train_error, test_error))
+
+
+  RSS_df[col_name] = regfit.fwd.summary$rss
+  RSq_df[col_name] = regfit.fwd.summary$adjr2
+  Cp_df[col_name] = regfit.fwd.summary$cp
+  BIC_df[col_name] = regfit.fwd.summary$bic
+}
+```
+
+
+```{r}
+# frequency of best number of variables
+table(best_models$best_num_of_variables)
+highest_best_num = as.integer(names(which.max(table(best_models$best_num_of_variables))))
+  
+# most important variables
+sort(table(strsplit(paste0(best_models$best_variables, collapse=','), ',')[[1]]), decreasing = TRUE)[1:highest_best_num]
+
+```
+
+
+# The relationship between the number of variables and the metrics of model performance
+
+
+```{r}
+# RSS
+gather_RSS_df = gather(RSS_df)
+gather_RSS_df['x'] = rep(1:nrow(RSS_df), n)
+p1 = ggplot(data = gather_RSS_df, aes(x=x, y=value, color=key)) +
+  geom_line() +
+  geom_vline(xintercept = highest_best_num) +
+  xlab("Number of Variables") +
+  ylab("RSS") +
+  theme(legend.position="none")
+
+
+# RSq
+gather_RSq_df = gather(RSq_df)
+gather_RSq_df['x'] = rep(1:nrow(RSq_df), n)
+p2 = ggplot(data = gather_RSq_df, aes(x=x, y=value, color=key)) +
+  geom_line() +
+  geom_vline(xintercept = highest_best_num) +
+  xlab("Number of Variables") +
+  ylab("Adjusted R Squared") +
+  theme(legend.position="none")
+
+# grid.arrange(p1, p2, ncol=2)
+
+# Cp
+gather_Cp_df = gather(Cp_df)
+gather_Cp_df['x'] = rep(1:nrow(Cp_df), n)
+p3 = ggplot(data = gather_Cp_df, aes(x=x, y=value, color=key)) +
+  geom_line() +
+  geom_vline(xintercept = highest_best_num) +
+  xlab("Number of Variables") +
+  ylab("Cp") +
+  theme(legend.position="none")
+
+# BIC
+gather_BIC_df = gather(BIC_df)
+gather_BIC_df['x'] = rep(1:nrow(BIC_df), n)
+p4 = ggplot(data = gather_BIC_df, aes(x=x, y=value, color=key)) +
+  geom_line() +
+  geom_vline(xintercept = highest_best_num) +
+  xlab("Number of Variables") +
+  ylab("BIC") +
+  theme(legend.position="none")
+
+grid.arrange(p1, p2, p3, p4, nrow=2, ncol=2)
+```
+
+
+## Training vs. Test errors
+
+The training and test errors from the best model of the 20 runs of forward model selections.
+
+```{r}
+# Erros DataFrame
+errors_df$error_type = c(rep('train', nrow(train)), rep('test', nrow(test)))
+gather_errors_df = gather(errors_df, key = "key", value = "value", setdiff(names(errors_df), 'error_type'))
+
+ggplot(data = gather_errors_df, aes(x = key, y = value, color=error_type)) +
+  geom_boxplot() +
+  xlab(paste0(n, ' runs')) +
+  ylab('MSE') +
+  scale_color_discrete(name = "Error Type") +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+
