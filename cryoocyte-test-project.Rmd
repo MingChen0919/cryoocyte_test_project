@@ -2,7 +2,9 @@
 title: "Cryoocyte Test Project"
 author: "Ming Chen"
 date: "10/5/2018"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -16,7 +18,6 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 library(ggplot2)   # data visualization
 library(tidyverse) # a set of module for data manipulation
 library(leaps)
-library(caret)
 library(gridExtra)
 ```
 
@@ -30,6 +31,8 @@ my_test_data = read_csv('data/test.csv')
 
 # Linear Model selection
 
+The data is being randomly split into training and testing sets in the 70/30 ratio. The forward selection method is implemented to determine the best final model. In the intial round of machine learning analysis, the full (with all 100 variables included) linear model has an R2 score up to **0.999**. In this section, I aim to find a simpler liner model which has an R2 score larger than **0.995** but use less features.
+
 ## Forward selection
 
 ```{r}
@@ -42,6 +45,7 @@ test = my_data[-index, ]
 regfit.fwd = regsubsets(y~., data = train, nvmax = 1000, method = "forward")
 regfit.fwd.summary = summary(regfit.fwd)
 
+# save train and test errors
 best_num_of_variables = head(which(regfit.fwd.summary$adjr2 > 0.995), 1)
 best_variables = paste0(names(coef(regfit.fwd, best_num_of_variables))[-1], collapse=',')
 best_models = data.frame(best_num_of_variables, best_variables, stringsAsFactors = FALSE)
@@ -53,7 +57,7 @@ train_error = (train$y - train_pred)^2
 test_error = (test$y - test_pred)^2
 errors_df = data.frame(run_01=c(train_error, test_error))
 
-
+# save performance metrics
 RSS_df = data.frame(run_01 = regfit.fwd.summary$rss)
 RSq_df = data.frame(run_01 = regfit.fwd.summary$adjr2)
 Cp_df = data.frame(run_01 = regfit.fwd.summary$cp)
@@ -72,6 +76,7 @@ for (i in 2:n) {
     col_name = paste0('run_', i)
   }
   
+  # save train and test errors
   best_num_of_variables = head(which(regfit.fwd.summary$adjr2 > 0.995), 1)
   best_variables = paste0(names(coef(regfit.fwd, best_num_of_variables))[-1], collapse=',')
   best_models[i, ] = c(best_num_of_variables, best_variables)
@@ -83,7 +88,7 @@ for (i in 2:n) {
   test_error = (test$y - test_pred)^2
   errors_df[col_name] = data.frame(run_1=c(train_error, test_error))
 
-
+  # save performance metrics
   RSS_df[col_name] = regfit.fwd.summary$rss
   RSq_df[col_name] = regfit.fwd.summary$adjr2
   Cp_df[col_name] = regfit.fwd.summary$cp
@@ -92,19 +97,30 @@ for (i in 2:n) {
 ```
 
 
+# Determine which variables should be kept in the final linear model
+
+After randomly spliting the data and implementing the forward selection 20 times, we can determine what's the best number of variables to keep and which variables they are if we want to have an R2 score up to 0.995.
+
+## The best of number of features to keep
+
 ```{r}
 # frequency of best number of variables
 table(best_models$best_num_of_variables)
-highest_best_num = as.integer(names(which.max(table(best_models$best_num_of_variables))))
-  
-# most important variables
-sort(table(strsplit(paste0(best_models$best_variables, collapse=','), ',')[[1]]), decreasing = TRUE)[1:highest_best_num]
+barplot(table(best_models$best_num_of_variables))
+```
 
+## The most important features
+
+```{r}  
+# most important variables
+highest_best_num = as.integer(names(which.max(table(best_models$best_num_of_variables))))
+most_important_features = sort(table(strsplit(paste0(best_models$best_variables, collapse=','), ',')[[1]]), 
+     decreasing = TRUE)[1:highest_best_num]
+most_important_features
 ```
 
 
 # The relationship between the number of variables and the metrics of model performance
-
 
 ```{r}
 # RSS
@@ -156,12 +172,13 @@ grid.arrange(p1, p2, p3, p4, nrow=2, ncol=2)
 
 ## Training vs. Test errors
 
-The training and test errors from the best model of the 20 runs of forward model selections.
+The plot below shows that the training and test errors are very low and pretty close to each other across all 20 runs, which means that model fits both the training and test data sets well.
 
 ```{r}
 # Erros DataFrame
 errors_df$error_type = c(rep('train', nrow(train)), rep('test', nrow(test)))
-gather_errors_df = gather(errors_df, key = "key", value = "value", setdiff(names(errors_df), 'error_type'))
+gather_errors_df = gather(errors_df, key = "key", value = "value", 
+                          setdiff(names(errors_df), 'error_type'))
 
 ggplot(data = gather_errors_df, aes(x = key, y = value, color=error_type)) +
   geom_boxplot() +
@@ -173,3 +190,20 @@ ggplot(data = gather_errors_df, aes(x = key, y = value, color=error_type)) +
 ```
 
 
+## Final Linear Model
+
+
+```{r}
+final_lm = lm(y~., my_data[c(names(most_important_features), 'y')])
+# remove non significant terms
+update_final_lm = update(final_lm, . ~ . -1)
+final_lm_summary = summary(update_final_lm)
+final_lm_summary
+```
+
+
+```{r echo=FALSE}
+final_terms = attr(final_lm_summary$terms, "term.labels")
+```
+
+**The final linear model includes `r length(final_terms)` features: `r final_terms`.**
