@@ -1,7 +1,6 @@
 ---
-title: "Cryoocyte Test Project"
+title: "Cryoocyte Test Project: Linear Model Selection Part"
 author: "Ming Chen"
-date: "10/5/2018"
 output:
   pdf_document: default
   html_document: default
@@ -19,6 +18,7 @@ library(ggplot2)   # data visualization
 library(tidyverse) # a set of module for data manipulation
 library(leaps)
 library(gridExtra)
+set.seed(123)
 ```
 
 ## Import Data
@@ -114,7 +114,8 @@ barplot(table(best_models$best_num_of_variables))
 ```{r}  
 # most important variables
 highest_best_num = as.integer(names(which.max(table(best_models$best_num_of_variables))))
-most_important_features = sort(table(strsplit(paste0(best_models$best_variables, collapse=','), ',')[[1]]), 
+most_important_features = sort(table(
+  strsplit(paste0(best_models$best_variables, collapse=','), ',')[[1]]), 
      decreasing = TRUE)[1:highest_best_num]
 most_important_features
 ```
