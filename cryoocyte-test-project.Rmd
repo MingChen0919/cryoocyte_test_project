@@ -205,6 +205,7 @@ final_lm_summary
 
 ```{r echo=FALSE}
 final_terms = attr(final_lm_summary$terms, "term.labels")
+write.csv(final_lm_summary$coefficients, file = "data/final_linear_model.csv")
 ```
 
 **The final linear model includes `r length(final_terms)` features: `r final_terms`.**
