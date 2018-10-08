@@ -209,3 +209,24 @@ write.csv(final_lm_summary$coefficients, file = "data/final_linear_model.csv")
 ```
 
 **The final linear model includes `r length(final_terms)` features: `r final_terms`.**
+
+
+## Model 1 Submission
+
+```{r}
+model1_test_data = read_csv("data/test.csv")
+
+```
+
+```{r}
+for (i in 1:nrow(model1_test_data)) {
+
+}
+```
+
+
+```{r}
+submission = data.frame(prediction = predict(update_final_lm, newdata = model1_test_data))
+
+```
+
