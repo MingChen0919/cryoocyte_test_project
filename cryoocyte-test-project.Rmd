@@ -35,6 +35,8 @@ The data is being randomly split into training and testing sets in the 70/30 rat
 
 ## Forward selection
 
+Backward selection generated similar results. Therefore, only forward selection analysis is presented here.
+
 ```{r}
 n = 20 # 20x cross valiation: train/test = 70/30
 
